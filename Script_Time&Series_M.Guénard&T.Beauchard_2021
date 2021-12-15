@@ -1,0 +1,409 @@
+#Packages 
+#install.packages(c("ade4"))
+library(ade4)
+#install.packages(c("factoextra")) 
+library(factoextra)
+#install.packages(c("magrittr"))
+library(magrittr)
+library(FactoMineR)
+#install.packages(c("Factoshiny","missMDA","FactoInvestigate"))
+library(Factoshiny)
+library(missMDA)
+library(FactoInvestigate)
+#install.packages(c(" RcmdrPlugin.FactoMineR"," Rcmdr "))
+library(Rcmdr)
+library(RcmdrPlugin.FactoMineR)
+
+
+# importez le fichier
+library(readxl)
+BDD_Microchimie<- read_excel("data_acp.xlsx",sheet = "DATA brutes J_TDM")
+View(BDD_Microchimie)
+
+# selection des 2 matrices milieu et plan d echantillonnage
+mil<-BDD_Microchimie[,1:13]
+mil
+plan<-BDD_Microchimie[,14:17]
+plan
+
+row.names(mil)<-BDD_Microchimie$ID #donner le nom de INDIVIDUS aux lignes 
+row.names(plan)<-BDD_Microchimie$ID
+
+# charger le package ade4
+library(ade4)
+library(adegraphics)
+pca1<-dudi.pca(mil,center=TRUE, scann=F, nf=3)# ACP centree
+#pca2<-dudi.pca(mil,scale=T, scann=F, nf=3)# ACP Normee
+
+test<-testdim(pca1,nrepet=999,alpha=0.05) # pour tester si les axes sont significatifs
+test$nb.cor # le nombre d'axe significatif est pr???sent??? ici
+
+summary(pca1)
+
+# pour obtenir les valeurs propres et l'inertie
+VP<-pca1$eig 
+VP
+sum(pca1$eig)# pour verifier que la somme des VP est egale au nombre de variables initiales
+
+inertie<-pca1$eig/sum(pca1$eig)
+inertie
+inertiecumul<-cumsum(pca1$eig)/sum(pca1$eig)
+inertiecumul
+barplot(inertie)
+
+#Pour visualiser la contribution des variables aux Composantes Pricipales
+windows()
+fviz_contrib(pca1, choice = "var", axes = 1:2)# aux deux premieres CP (Contribution totale sur PC1 et PC2)
+windows()
+fviz_contrib(pca1, choice = "var", axes =c(1,3))# axe 1 et 3
+windows()
+fviz_contrib(pca1, choice = "var", axes = 2:3)# axe 2 et 3
+
+
+# R???sultats des variables avec facto extra
+res.var <- get_pca_var(pca1)
+res.var$coord          # Coordonn???es
+contributions_TDM<-res.var$contrib        # Contributions aux axes
+res.var$cos2           # Qualit??? de repr???sentation 
+
+library(tidyverse)
+library(here) #package qui permet d'enregistrer des resultats sous forme d'excel.
+write.csv2(contributions_TDM, here::here("C:/Users/maxca/OneDrive/Bureau/INRAE/essais acp inrae","contributions_TDM.csv"),row.names = FALSE ) 
+
+
+# Valeurs propres
+
+eig.val_TDM<- get_eigenvalue(pca1)
+eig.val_TDM ; write.csv2(eig.val_TDM, here::here("C:/Users/maxca/OneDrive/Bureau/INRAE/essais acp inrae","eig.val_TDM.csv"),row.names = FALSE ) 
+fviz_eig(pca1)
+inertia.dudi(pca1) #meme chose
+
+#etude des variables
+# avec ade4
+
+# s.class pour repr?senter les centres de gravite de chaque groupe et le lien entre un ?chantillon et son groupe d'appartenance
+
+s.corcircle(pca1$co,xax=1, yax=2)
+s.corcircle(pca1$co,xax=1, yax=3)
+s.corcircle(pca1$co,xax=2, yax=3)
+# avec facto extra. Coloration en fonction de la contribution des variables.
+windows()
+Corcircle<-fviz_pca_var(pca1,
+                        xax=1,yax=2, 
+                        col.var = "contrib", 
+                        gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+                        repel = TRUE     
+)
+Corcircle
+windows()
+Corcircle2<-fviz_pca_var(pca1,
+                         axes = 2:3,
+                         col.var = "contrib", 
+                         gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+                         repel = TRUE     
+)
+Corcircle2
+windows()
+Corcircle3<-fviz_pca_var(pca1,
+                         axes = c(1,3),
+                         col.var = "contrib", 
+                         gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+                         repel = TRUE     
+)
+Corcircle3
+
+# Etude des individus 
+# avec ade4
+par(mfrow=c(1,3))
+s.label(pca1$li,xax=1,yax=2,labels = plan$ID,facets=plan$BV)
+s.label(pca1$li,xax=1,yax=3,labels = plan$ID,facets=plan$BV)
+s.label(pca1$li,xax=2,yax=3,labels = plan$ID,facets=plan$BV)
+
+
+# avec facto extra. Coloration en fonction du cos2 (qualit??? de repr???sentation). Les individus similaires sont group???s ensemble.Illisible dans ce cas bien s???r
+windows()
+fviz_pca_ind(pca1, axes = c(2,3),
+             col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     , label="all"
+)
+
+# Resultats des individus avec facto extra
+res.ind <- get_pca_ind(pca1)
+res.ind$coord          # Coordonn???es
+ind_contributions_TDM<-res.ind$contrib        # Contributions aux axes
+res.ind$cos2           # Qualit??? de repr???sentation
+
+write.csv2(ind_contributions_TDM, here::here("C:/Users/maxca/OneDrive/Bureau/INRAE/essais acp inrae","ind_contributions_TDM.csv"),row.names = FALSE ) 
+
+#Pour visualiser la contribution des individus aux deux premi???res composantes principales (Contribution totale sur PC1 et PC2)
+windows()
+fviz_contrib(pca1, choice = "ind", axes = c(2,3))# top = 10 si on ne veut faire appara???tre que les 10 premi???res plus forets contributions
+
+# s.label pour representer l'ensemble des un
+plan$phenotype<-as.factor(plan$phenotype)
+plan$BV<-as.factor(plan$BV)
+plan$A_Mat<-as.factor(plan$A_Mat) 
+
+windows()
+s.label(pca1$li,xax=1,yax=2)
+windows()
+s.label(pca1$li,xax=1,yax=3)
+windows()
+s.label(pca1$li,xax=2,yax=3)
+
+# pour les bassins versants
+gcol2<-c("green","red","blue")
+windows() 
+par(mfrow=c(1,3))
+
+windows()
+s.class(pca1$li,plan$BV,col=gcol2,xax=1,yax=2,cellipse=0)
+windows()
+s.class(pca1$li,plan$BV,col=gcol2,xax=1,yax=3,cellipse=0)
+windows()
+s.class(pca1$li,plan$BV,col=gcol2,xax=2,yax=3,cellipse=0)
+
+#Pour visualiser la contribution des individus aux deux premi???res composantes principales (Contribution totale sur PC1 et PC2)
+fviz_contrib(pca1, choice = "ind", axes = 1:2)# top = 10 si on ne veut faire appara???tre que les 10 premi???res plus forets contributions
+
+# Biplot des individus et des variables
+#avec ade4
+windows()
+scatter(pca1,xax=2,yax=3,
+        posieig = "bottomright", # Cacher le scree plot
+        clab.row = 1.5     # Faire apparaitre l'annotation de slignes sinon 0
+)
+
+#meme chose
+windows()
+fviz_pca_biplot(pca1,axes = c(2,3), repel = TRUE,
+                col.var = "#2E9FDF", # Couleur des variables
+                col.ind = "#696969"  # Couleur des individues
+)
+#meme chose
+fviz_pca_biplot(pca1, label ="var", axes = c(2,3))
+
+windows()
+a<- fviz_pca_biplot(pca1, label="var", habillage=BDD_Microchimie$BV,
+                    addEllipses=TRUE,  axes = c(1, 2), ellipse.level=0.95,ellipse.alpha=0.2,pointsize=2)
+a + scale_color_brewer(palette="Set1") +
+  theme_minimal()
+print(a)
+windows()
+b<- fviz_pca_biplot(pca1, label="var", habillage=BDD_Microchimie$BV,
+                    addEllipses=TRUE,  axes = c(1, 3), ellipse.level=0.95,ellipse.alpha=0.2,pointsize=2)
+b + scale_color_brewer(palette="Set1") +
+  theme_minimal()
+print(b)
+windows()
+c <- fviz_pca_biplot(pca1, label="var", habillage=BDD_Microchimie$BV,
+                     addEllipses=TRUE,  axes = c(2, 3), ellipse.level=0.95,ellipse.alpha=0.2,pointsize=2)
+c + scale_color_brewer(palette="Set1") +
+  theme_minimal()
+print(c)
+
+# essais inter-sites
+betseason <-bca(pca1,plan$BV, scannf = FALSE, nf =3)
+#bca.dudi(x =pca1,fac=plan$BV, scannf = FALSE, nf = 4)
+windows()
+plot(betseason, row.pellipses.col = adegpar()$ppalette$quali(5))
+
+
+####### Test de Clustering et CHA #################
+
+# 1. Loading and preparing data
+df <- scale(mil)
+
+# 2. Compute k-means
+#set.seed(123)
+km.res <- kmeans(scale(mil), 4, nstart = 25)
+
+# 3. Visualize
+
+fviz_cluster(km.res , data = df,axes = c(1, 2),
+             palette = c("#00AFBB","#2E9FDF", "#E7B800", "#FC4E07"),
+             ggtheme = theme_minimal(),
+             main = "Partitioning Clustering Plot"
+)
+
+# essais de PAM clustering
+# ++++++++++++++++++++
+require(cluster)
+pam.res <- pam(df, 4)
+# Visualize pam clustering
+fviz_cluster(pam.res, geom = "point",axes=c(1,3), ellipse.type = "norm")
+
+
+# Hierarchical clustering
+# ++++++++++++++++++++++++
+# Use hcut() which compute hclust and cut the tree
+hc.cut <- hcut(df, k = 6, hc_method = "complete")
+# Visualize dendrogram
+windows()
+fviz_dend(hc.cut, show_labels = TRUE, rect = TRUE)
+# Visualize cluster
+windows()
+fviz_cluster(hc.cut, ellipse.type = "convex", axes = c(1,2)) #â¢ on peut changer les axes pour mieux voir spatialement
+
+
+factoextra::fviz_nbclust(mil, FUNcluster =factoextra::hcut, method = "silhouette",hc_method = "average", hc_metric = "euclidean", stand = TRUE)
+NbClust::NbClust(mil, distance = "euclidean",method = "average")
+
+resCAH <- factoextra::hcut(mil, k = 3, hc_method = "ward.D" , 
+                           hc_metric = "euclidean",label =plan$BV,color_labels_by_k = TRUE, stand = TRUE)
+windows()
+fviz_dend(resCAH, rect = TRUE, show_labels = T, color_labels_by_k = TRUE)
+# Visualize cluster
+windows()
+fviz_cluster(resCAH, ellipse.type = "convex", axes = c(1,2)) #â¢ on peut changer les axes pour mieux voir spatialement
+
+
+#####################################################
+
+library(MASS)# DISCRIMINATION DESCRIPTIVE ET PREDICTIVE - CHARGER LE PACKAGE MASS
+
+
+# QDA et jackknife reclassification (cross-validation)
+# ++++++++++++++++++++++++
+
+#donnÃ©es reclassÃ©es
+x<-dudi.pca(resCAH$data,scannf = FALSE)
+ad<-discrimin(x,plan$BV,scannf = FALSE,nf=2)
+windows()
+plot(ad)
+
+
+#donnÃ©es brutes
+j<-dudi.pca(mil,scannf = FALSE)
+JJ<-discrimin(j,plan$BV,scannf = FALSE,nf=2)
+windows()
+plot(JJ)
+
+#++++++++++++++++++++++++
+  #Dans le cas de la truite sedentaire on a trop peu de donnÃ©es pour realiser cette analyse.
+  #donnÃ©es brutes
+
+mil_ajust<-mil[,-c(4:6)]
+Quick_qda<-qda(mil_ajust,plan$BV,CV=TRUE)
+barplot(Quick_qda$posterior)
+
+#donnÃ©es reclasÃ©es
+resCAH$data_adjust<-resCAH$data[,-c(4:6)]
+Quick_qda<-qda(resCAH$data_adjust,plan$BV,CV=TRUE)
+windows()
+barplot(Quick_qda$posterior)
+
+cross_validation<-Quick_qda$posterior
+write.csv2(cross_validation, here::here("C:/Users/maxca/OneDrive/Bureau/INRAE/essais acp inrae","cross_validation.csv"),row.names = FALSE ) 
+
+
+#++++++++++++++++++++++++
+  #PERMANOVA
+  library(vegan)
+adonis(resCAH$data~plan$BV, data=BDD_Microchimie, permutations = 999, method = "bray")
+
+pairwise.adonis <- function(x,factors, sim.method = 'bray', p.adjust.m ='bonferroni')
+{
+  library(vegan)
+  co = combn(unique(factors),2)
+  pairs = c()
+  F.Model =c()
+  R2 = c()
+  p.value = c()
+  for(elem in 1:ncol(co)){
+    ad = adonis(x[factors %in% c(co[1,elem],co[2,elem]),] ~ factors[factors %in% c(co[1,elem],co[2,elem])] , method =sim.method);
+    pairs = c(pairs,paste(co[1,elem],'vs',co[2,elem]));
+    F.Model =c(F.Model,ad$aov.tab[1,4]);
+    R2 = c(R2,ad$aov.tab[1,5]);
+    p.value = c(p.value,ad$aov.tab[1,6])
+  }
+  p.adjusted = p.adjust(p.value,method=p.adjust.m)
+  pairw.res = data.frame(pairs,F.Model,R2,p.value,p.adjusted)
+  return(pairw.res)
+}
+
+res_pairwise_TDM<-pairwise.adonis(resCAH$data,as.vector(plan$BV), sim.method = 'bray', p.adjust.m ='bonferroni')
+
+write.csv2(res_pairwise_TDM, here::here("C:/Users/maxca/OneDrive/Bureau/INRAE/essais acp inrae","res_pairwise_TDM.csv"),row.names = FALSE ) 
+
+#estimateur des affectations aux classes qui est moins biais? que celui de
+#l'estimation directe. qda() effectue une validation crois?e de type
+#? jackknife ? : en enlevant s?quentiellement chacun des objets, en calculant
+#la fonction sur les individus restants et en l'appliquant ? l'individu ?limin?.
+# 1: We extract by randomization 50 individual from the dataset, create a table containing these individuals tabref and a factor containing the name of the species they belong to espref.
+echa <- sample(1:42, 30)
+BDD_Microchimie_modif <- BDD_Microchimie[,-c(4:6)]
+tabref<-BDD_Microchimie_modif [echa,1:10]
+espref <- BDD_Microchimie_modif [echa, 13]
+tabref 
+espref 
+
+# 2: We create a table tabsup with the 46 other chrysopes and a factor containing the names of the species they belong to espsup.
+tabsup <-BDD_Microchimie_modif[-echa,1:10] #- echa = sans ?ch al?atoire
+espsup <- BDD_Microchimie_modif[-echa, 13]
+nrow(tabsup)
+
+espref<-as.factor(espref)
+
+tabref2<-BDD_Microchimie_modif[,1:10] 
+espref2<-BDD_Microchimie_modif[,11:13] 
+# 3: We compute a linear discriminant analysis using the 50 references (using tabref espref). Reclassement par l???AFD. On effectue une analyse discriminante des esp???ces de chrysopes. La fonction de classement lda est centr???e sur l'affectation d'un individu ??? une classe.  
+ldaref<-qda(tabref2, espref2$BV,scannf=TRUE)
+ldaref
+
+# 4: We predict the allocations of the 46 other chrysopes and provide a contingency table dealing with the known species information and the allocations.
+espestim <- predict(ldaref, tabsup)$class 
+table(espsup,espestim)
+
+Pmalclasse<-100*(4)/12
+PbienClasse<-100*(12-4)/12
+Pmalclasse
+PbienClasse
+
+
+
+##############Corr???lation http://www.sthda.com/french/wiki/visualiser-une-matrice-de-correlation-par-un-correlogramme
+library(corrplot)
+physicoC1<-BDD_Microchimie[,1:13]
+M<-cor(physicoC1)
+p.mat <- cor.mtest(physicoC1)#Matrice de p-value de la corr???lation
+corrplot(M, method="circle",type="upper", order="hclust")
+
+# Calcul de la p-value des corr???lations 
+# Pour calculer la p-value des matrices, nous utilisons une fonction personnalis???e:
+# mat : matrice de donn???e
+# ... : Arguments suppl???mentaire ??? passer ??? la fonction cor.test
+cor.mtest <- function(mat, ...) {
+  mat <- as.matrix(mat)
+  n <- ncol(mat)
+  p.mat<- matrix(NA, n, n)
+  diag(p.mat) <- 0
+  for (i in 1:(n - 1)) {
+    for (j in (i + 1):n) {
+      tmp <- cor.test(mat[, i], mat[, j], ...)
+      p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
+    }
+  }
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  p.mat
+}
+# Matrice de p-value de la corr???lation
+p.mat <- cor.mtest(physicoC1)
+# Ajout du niveau de significativit??? au corr???logramme (corr???lations non significatives en blanc)
+windows()
+corrplot(M, type="upper", order="hclust", 
+         p.mat = p.mat, sig.level = 0.01, insig = "blank")
+
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+# Personnaliser le corr???logramme
+windows()
+corrplot(M, method="color", col=col(200),  
+         type="upper", order="hclust", 
+         addCoef.col = "black", # Ajout du coefficient de corr???lation
+         tl.col="black", tl.srt=45, #Rotation des etiquettes de textes
+         # Combiner avec le niveau de significativit???
+         p.mat = p.mat, sig.level = 0.01, insig = "blank", 
+         # Cacher les coefficients de corr???lation sur la diagonale
+         diag=FALSE 
+)
